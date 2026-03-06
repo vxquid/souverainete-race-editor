@@ -1,0 +1,683 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Souverainete | Race Studio X</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Vue 3 -->
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <!-- JS-YAML -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/js-yaml/4.1.0/js-yaml.min.js"></script>
+    <!-- Skinview3D -->
+    <script src="https://unpkg.com/skinview3d@3.0.0/bundles/skinview3d.bundle.js"></script>
+    <!-- JSZip (for Firefox fallback) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <!-- GSAP (The God of Animations) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        dark: '#0a0a0c',
+                        panel: '#121216',
+                        panelHover: '#1c1c22',
+                        accent: '#8b5cf6',
+                        accentHover: '#7c3aed'
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { 
+            background-color: #0a0a0c; 
+            color: #e4e4e7; 
+            /* Native Firefox Scrollbars */
+            scrollbar-width: thin; 
+            scrollbar-color: #3f3f46 transparent;
+        }
+        
+        /* Webkit Scrollbars */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #3f3f46; border-radius: 4px; border: 2px solid #121216; }
+        ::-webkit-scrollbar-thumb:hover { background: #52525b; }
+        
+        .list-textarea { white-space: pre; font-family: monospace; line-height: 1.5; }
+        
+        /* Sticky Table Header */
+        th.sticky-header {
+            position: sticky; top: 0; background-color: #121216; z-index: 10;
+            box-shadow: 0 1px 0 rgba(255, 255, 255, 0.05);
+        }
+
+        /* Mouse Glow Effect Layer */
+        #glow-layer {
+            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+            pointer-events: none; z-index: 0;
+            background: radial-gradient(circle 600px at var(--mouse-x, 50%) var(--mouse-y, 50%), rgba(139, 92, 246, 0.04), transparent 40%);
+            transition: opacity 0.3s ease;
+        }
+
+        /* Essential GSAP class for transitions */
+        .gsap-wrapper > * { will-change: transform, opacity; }
+    </style>
+</head>
+<body class="h-screen flex overflow-hidden font-sans selection:bg-accent selection:text-white" @mousemove="updateMouse">
+
+<div id="glow-layer"></div>
+
+<div id="app" class="flex w-full h-full relative z-10">
+
+    <!-- WELCOME SCREEN -->
+    <transition @enter="enterWelcome" @leave="leaveWelcome" :css="false">
+        <div v-if="!isConnected" class="absolute inset-0 w-full h-full flex flex-col items-center justify-center bg-dark z-50 welcome-screen">
+            <div class="text-center max-w-xl welcome-content">
+                <div class="welcome-logo w-24 h-24 bg-gradient-to-br from-accent to-blue-600 text-white rounded-3xl flex items-center justify-center mx-auto mb-8 shadow-[0_0_50px_rgba(139,92,246,0.3)]">
+                    <svg class="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 002-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
+                </div>
+                <h1 class="welcome-text text-6xl font-black text-transparent bg-clip-text bg-gradient-to-r from-white to-gray-500 mb-4 tracking-tighter">Race Studio</h1>
+                
+                <p class="welcome-text text-gray-400 mb-10 text-lg leading-relaxed">System initialized. Awaiting <code class="text-accent bg-accent/10 px-2 py-1 rounded">Souverainete</code> directory...</p>
+                
+                <div v-if="supportsFSA" class="welcome-btn">
+                    <button @click="openFolderFSA" class="group relative bg-white text-black px-10 py-5 rounded-2xl font-bold transition-all hover:scale-105 active:scale-95 shadow-[0_0_30px_rgba(255,255,255,0.1)] hover:shadow-[0_0_40px_rgba(255,255,255,0.3)] text-xl flex items-center gap-4 mx-auto overflow-hidden">
+                        <div class="absolute inset-0 bg-gradient-to-r from-accent to-blue-500 opacity-0 group-hover:opacity-10 transition-opacity"></div>
+                        <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
+                        Mount Directory
+                    </button>
+                </div>
+                
+                <div v-else class="welcome-btn relative inline-block cursor-pointer">
+                    <label class="cursor-pointer group bg-panel border border-gray-700 hover:border-orange-500 text-white px-10 py-5 rounded-2xl font-bold transition-all hover:scale-105 active:scale-95 shadow-2xl text-xl flex items-center gap-4 mx-auto">
+                        <svg class="w-7 h-7 text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 19a2 2 0 01-2-2V7a2 2 0 012-2h4l2 2h4a2 2 0 012 2v1M5 19h14a2 2 0 002-2v-5a2 2 0 00-2-2H9a2 2 0 00-2 2v5a2 2 0 01-2 2z"></path></svg>
+                        Load Workspace (ZIP Mode)
+                        <input type="file" webkitdirectory directory multiple @change="openFolderFallback" class="hidden">
+                    </label>
+                    <p class="text-sm text-orange-400/80 mt-6 max-w-md mx-auto bg-orange-400/10 p-3 rounded-lg border border-orange-400/20">
+                        🦊 Firefox detected. Saving files directly to disk is restricted. Changes will be compiled into a `.zip` archive.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </transition>
+
+    <!-- MAIN EDITOR -->
+    <template v-if="isConnected">
+        <!-- Sidebar -->
+        <div ref="sidebar" class="w-72 bg-panel border-r border-gray-800/50 flex flex-col z-20 shadow-2xl shrink-0">
+            <div class="p-8 border-b border-gray-800/50 flex flex-col gap-2 relative overflow-hidden">
+                <div class="absolute -right-4 -top-4 w-20 h-20 bg-accent/20 blur-2xl rounded-full"></div>
+                <h1 class="text-xs font-black text-gray-500 uppercase tracking-widest">Workspace</h1>
+                <div class="text-white font-bold truncate flex items-center gap-3 mt-1">
+                    <div class="w-2.5 h-2.5 rounded-full bg-green-500 shadow-[0_0_12px_rgba(34,197,94,0.8)] relative">
+                        <div class="absolute inset-0 rounded-full bg-green-400 animate-ping opacity-75"></div>
+                    </div>
+                    Souverainete
+                </div>
+            </div>
+            
+            <div class="flex-1 overflow-y-auto py-6 px-4 space-y-2">
+                <transition-group @enter="enterSidebarItem" :css="false">
+                    <div v-for="(race, key, index) in config.races" :key="key" :data-index="index"
+                         @click="selectRace(key)"
+                         :class="['sidebar-item px-5 py-4 rounded-2xl cursor-pointer transition-all duration-300 flex justify-between items-center group relative overflow-hidden', 
+                                  activeRaceKey === key ? 'bg-accent/15 shadow-[inset_0_0_0_1px_rgba(139,92,246,0.3)]' : 'hover:bg-white/5']">
+                        <div v-if="activeRaceKey === key" class="absolute left-0 top-0 bottom-0 w-1 bg-accent rounded-r-full shadow-[0_0_10px_#8b5cf6]"></div>
+                        <div class="font-bold capitalize tracking-wide text-white drop-shadow-md">
+                            {{ key }}
+                        </div>
+                        <svg class="w-5 h-5 text-gray-500 group-hover:text-white transition-all transform group-hover:translate-x-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+                    </div>
+                </transition-group>
+                
+                <button @click="addNewRace" class="w-full mt-6 px-5 py-4 rounded-2xl text-sm font-bold text-accent hover:text-white border-2 border-dashed border-accent/20 hover:border-accent hover:bg-accent/10 flex items-center justify-center gap-2 transition-all group">
+                    <svg class="w-5 h-5 transform group-hover:rotate-90 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                    Create New Race
+                </button>
+            </div>
+
+            <!-- Save Action -->
+            <div class="p-6 border-t border-gray-800/50 bg-panel">
+                <button @click="saveAll" class="w-full bg-white text-black hover:bg-gray-200 py-4 rounded-2xl font-black transition-all shadow-[0_4px_20px_0_rgba(255,255,255,0.15)] flex justify-center items-center gap-3 hover:scale-[1.03] active:scale-95 text-lg">
+                    <svg v-if="saving" class="animate-spin h-6 w-6 text-black" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <template v-else>
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path></svg>
+                    </template>
+                    {{ saving ? 'Compiling...' : (supportsFSA ? 'Save Changes' : 'Pack ZIP') }}
+                </button>
+                <div v-if="saveMessage" class="mt-4 text-center text-sm font-bold text-green-400 bg-green-400/10 py-2 rounded-xl border border-green-400/20">{{ saveMessage }}</div>
+            </div>
+        </div>
+
+        <!-- Right Content Area -->
+        <div class="flex-1 flex flex-col h-full overflow-y-auto bg-dark/50 relative px-8 py-10 custom-scrollbar" v-if="activeRace">
+            
+            <!-- NEW GIANT HEADER AND TABS -->
+            <div class="mb-10 max-w-5xl mx-auto w-full">
+                <h2 class="text-5xl font-black text-white capitalize mb-8 drop-shadow-2xl flex items-center gap-4">
+                    {{ activeRaceKey }}
+                    <span class="text-sm font-bold bg-accent/20 text-accent px-3 py-1 rounded-full uppercase tracking-widest align-middle border border-accent/30">Active</span>
+                </h2>
+                
+                <!-- The unmistakable beautiful tabs -->
+                <nav class="flex p-1.5 bg-panel border border-gray-800/60 rounded-2xl shadow-2xl relative w-max">
+                    <button v-for="tab in ['general', 'skins', 'names', 'phrases']" :key="tab"
+                            @click="activeTab = tab" 
+                            :class="['relative px-8 py-3.5 rounded-xl capitalize font-bold text-sm transition-all duration-300 z-10 flex items-center gap-2', 
+                                     activeTab === tab ? 'text-white' : 'text-gray-500 hover:text-gray-300']">
+                        <!-- Icons for tabs -->
+                        <svg v-if="tab === 'general'" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                        <svg v-if="tab === 'skins'" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                        <svg v-if="tab === 'names'" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
+                        <svg v-if="tab === 'phrases'" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path></svg>
+                        {{ tab }}
+                    </button>
+                    <!-- Animated Active Background Pill -->
+                    <div class="absolute top-1.5 bottom-1.5 bg-accent/20 border border-accent/40 rounded-xl transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] z-0"
+                         :style="activeTabStyle"></div>
+                </nav>
+            </div>
+
+            <!-- Content Area with GSAP Transitions -->
+            <div class="max-w-5xl mx-auto w-full pb-20 relative">
+                <transition @enter="gsapEnter" @leave="gsapLeave" :css="false" mode="out-in">
+                    
+                    <!-- GENERAL TAB -->
+                    <div v-if="activeTab === 'general'" key="general" class="space-y-8 gsap-wrapper">
+                        
+                        <div class="gsap-item bg-panel p-8 rounded-3xl border border-gray-800/60 shadow-xl hover:border-accent/40 transition-colors duration-500 group">
+                            <label class="block text-sm font-bold text-gray-300 mb-4 flex items-center gap-3 uppercase tracking-widest">
+                                <div class="w-8 h-8 rounded-lg bg-accent/10 flex items-center justify-center text-accent group-hover:bg-accent group-hover:text-white transition-colors">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h7"></path></svg>
+                                </div>
+                                Lore & Description
+                            </label>
+                            <textarea v-model="activeRace['race-description']" rows="4" 
+                                      class="w-full bg-dark/80 border border-gray-800 rounded-2xl p-5 text-sm focus:outline-none focus:border-accent/50 focus:ring-2 focus:ring-accent/20 transition-all"></textarea>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-8">
+                            <div class="gsap-item bg-panel p-8 rounded-3xl border border-gray-800/60 shadow-xl space-y-6 hover:border-blue-500/40 transition-colors duration-500 group">
+                                <h3 class="text-xs font-black text-blue-500 uppercase tracking-widest border-b border-gray-800 pb-4">Identity Settings</h3>
+                                <div>
+                                    <label class="block text-xs font-bold text-gray-500 mb-2 ml-1">Leader Title</label>
+                                    <input v-model="activeRace['leader-title']" class="w-full bg-dark/80 border border-gray-800 rounded-xl p-4 text-sm font-bold focus:border-blue-500/50 focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition-all">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-bold text-gray-500 mb-2 ml-1">Target Entity Type</label>
+                                    <input v-model="activeRace['target-entity-type']" class="w-full bg-dark/80 border border-gray-800 rounded-xl p-4 text-sm font-mono focus:border-blue-500/50 focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition-all">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-bold text-gray-500 mb-2 ml-1">Target Villager Type</label>
+                                    <input v-model="activeRace['target-villager-type']" class="w-full bg-dark/80 border border-gray-800 rounded-xl p-4 text-sm font-mono focus:border-blue-500/50 focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition-all">
+                                </div>
+                            </div>
+
+                            <div class="gsap-item bg-panel p-8 rounded-3xl border border-gray-800/60 shadow-xl space-y-6 hover:border-yellow-500/40 transition-colors duration-500 group">
+                                <h3 class="text-xs font-black text-yellow-500 uppercase tracking-widest border-b border-gray-800 pb-4">Economy Settings</h3>
+                                <div>
+                                    <label class="block text-xs font-bold text-gray-500 mb-2 ml-1">Normal Currency</label>
+                                    <input v-model="activeRace['normal-currency']" class="w-full bg-dark/80 border border-gray-800 rounded-xl p-4 text-sm font-mono focus:border-yellow-500/50 focus:outline-none focus:ring-2 focus:ring-yellow-500/20 transition-all">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-bold text-gray-500 mb-2 ml-1">Special Currency</label>
+                                    <input v-model="activeRace['special-currency']" class="w-full bg-dark/80 border border-gray-800 rounded-xl p-4 text-sm font-mono focus:border-yellow-500/50 focus:outline-none focus:ring-2 focus:ring-yellow-500/20 transition-all">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- SKINS TAB -->
+                    <div v-else-if="activeTab === 'skins'" key="skins" class="space-y-10 gsap-wrapper">
+                        <div v-for="gender in ['male', 'female']" :key="gender" class="gsap-item bg-panel rounded-3xl border border-gray-800/60 shadow-2xl overflow-hidden flex flex-col max-h-[75vh]">
+                            
+                            <!-- Header -->
+                            <div class="bg-gray-800/20 px-8 py-6 flex justify-between items-center border-b border-gray-800/60 shrink-0 backdrop-blur-md">
+                                <h4 class="font-black text-white capitalize flex items-center gap-4 text-2xl tracking-wide">
+                                    <span :class="gender === 'male' ? 'bg-blue-500 shadow-[0_0_15px_#3b82f6]' : 'bg-pink-500 shadow-[0_0_15px_#ec4899]'" class="w-4 h-4 rounded-full"></span> 
+                                    {{ gender }} Models
+                                </h4>
+                                <button @click="addSkin(gender)" class="text-sm bg-white text-black hover:bg-gray-200 font-bold px-6 py-3 rounded-xl transition-all shadow-lg flex items-center gap-2 hover:scale-105 active:scale-95">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                                    New Skin
+                                </button>
+                            </div>
+                            
+                            <!-- Table -->
+                            <div class="overflow-y-auto flex-1 relative bg-dark/30 p-2">
+                                <table class="w-full text-left border-separate border-spacing-y-2 px-4">
+                                    <thead>
+                                        <tr class="text-gray-500 text-xs font-black uppercase tracking-widest">
+                                            <th class="sticky-header p-4 pl-6 w-24 rounded-tl-xl rounded-bl-xl">ID</th>
+                                            <th class="sticky-header p-4 w-48 text-center">3D Preview</th>
+                                            <th class="sticky-header p-4">Base64 Texture</th>
+                                            <th class="sticky-header p-4">Signature</th>
+                                            <th class="sticky-header p-4 w-20 text-center rounded-tr-xl rounded-br-xl pr-6"></th>
+                                        </tr>
+                                    </thead>
+                                    <transition-group @enter="enterTableRow" @leave="leaveTableRow" :css="false" tag="tbody">
+                                        <tr v-for="(skinData, skinId, index) in activeExternalFiles.skins[gender]" :key="skinId" :data-index="index" class="skin-row bg-panel border border-gray-800 hover:border-gray-600 transition-colors group shadow-md rounded-2xl">
+                                            
+                                            <td class="p-4 pl-6 align-middle rounded-tl-2xl rounded-bl-2xl border-l border-t border-b border-gray-800 group-hover:border-gray-600">
+                                                <input :value="skinId" @change="e => updateSkinId(gender, skinId, e.target.value)" 
+                                                       class="w-full bg-dark border border-gray-800 rounded-xl p-3 text-sm font-black font-mono text-center text-white focus:border-accent/50 focus:outline-none focus:ring-2 focus:ring-accent/20 transition-all">
+                                            </td>
+                                            
+                                            <td class="p-4 align-middle flex justify-center py-6 border-t border-b border-gray-800 group-hover:border-gray-600">
+                                                <skin-viewer :texture="skinData.texture" :key="skinData.texture"></skin-viewer>
+                                            </td>
+                                            
+                                            <td class="p-4 align-middle border-t border-b border-gray-800 group-hover:border-gray-600">
+                                                <textarea v-model="skinData.texture" rows="4" placeholder="eyJ0ZXh0..." spellcheck="false"
+                                                          class="w-full bg-dark/50 border border-gray-800 rounded-xl p-4 text-[11px] font-mono text-gray-400 break-all focus:text-white focus:bg-dark focus:border-accent/50 focus:outline-none focus:ring-2 focus:ring-accent/20 resize-none transition-all group-hover:border-gray-700"></textarea>
+                                            </td>
+                                            
+                                            <td class="p-4 align-middle border-t border-b border-gray-800 group-hover:border-gray-600">
+                                                <textarea v-model="skinData.signature" rows="4" placeholder="Signature..." spellcheck="false"
+                                                          class="w-full bg-dark/50 border border-gray-800 rounded-xl p-4 text-[11px] font-mono text-gray-400 break-all focus:text-white focus:bg-dark focus:border-accent/50 focus:outline-none focus:ring-2 focus:ring-accent/20 resize-none transition-all group-hover:border-gray-700"></textarea>
+                                            </td>
+                                            
+                                            <td class="p-4 pr-6 align-middle text-center rounded-tr-2xl rounded-br-2xl border-r border-t border-b border-gray-800 group-hover:border-gray-600">
+                                                <button @click="deleteSkin(gender, skinId)" class="text-gray-500 hover:text-white bg-dark hover:bg-red-500 border border-gray-800 hover:border-red-500 p-3 rounded-xl transition-all transform hover:scale-110 shadow-lg" title="Obliterate">
+                                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    </transition-group>
+                                    <tbody v-if="Object.keys(activeExternalFiles.skins[gender] || {}).length === 0">
+                                        <tr>
+                                            <td colspan="5" class="p-16 text-center text-gray-500 font-bold">
+                                                <div class="w-16 h-16 bg-dark rounded-full flex items-center justify-center mx-auto mb-4 border border-gray-800">
+                                                    <svg class="w-8 h-8 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                                                </div>
+                                                <p class="text-lg">No skins configured.</p>
+                                                <p class="text-sm text-gray-600 mt-1">Click the button above to add a new 3D model.</p>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- NAMES TAB -->
+                    <div v-else-if="activeTab === 'names'" key="names" class="grid grid-cols-3 gap-8 gsap-wrapper">
+                        <div class="gsap-item bg-panel p-8 rounded-3xl border border-gray-800/60 shadow-xl flex flex-col h-[70vh] group hover:border-blue-500/30 transition-colors">
+                            <h3 class="text-sm font-black text-white uppercase tracking-widest mb-3 flex items-center gap-3"><span class="w-3 h-3 rounded-full bg-blue-500 shadow-[0_0_12px_#3b82f6]"></span> Male Names</h3>
+                            <textarea v-model="namesText.male" class="flex-1 w-full bg-dark/80 border border-gray-800 rounded-2xl p-5 text-sm list-textarea focus:border-blue-500/50 focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition-all custom-scrollbar" wrap="off"></textarea>
+                        </div>
+                        <div class="gsap-item bg-panel p-8 rounded-3xl border border-gray-800/60 shadow-xl flex flex-col h-[70vh] group hover:border-pink-500/30 transition-colors">
+                            <h3 class="text-sm font-black text-white uppercase tracking-widest mb-3 flex items-center gap-3"><span class="w-3 h-3 rounded-full bg-pink-500 shadow-[0_0_12px_#ec4899]"></span> Female Names</h3>
+                            <textarea v-model="namesText.female" class="flex-1 w-full bg-dark/80 border border-gray-800 rounded-2xl p-5 text-sm list-textarea focus:border-pink-500/50 focus:outline-none focus:ring-2 focus:ring-pink-500/20 transition-all custom-scrollbar" wrap="off"></textarea>
+                        </div>
+                        <div class="gsap-item bg-panel p-8 rounded-3xl border border-gray-800/60 shadow-xl flex flex-col h-[70vh] group hover:border-yellow-500/30 transition-colors">
+                            <h3 class="text-sm font-black text-white uppercase tracking-widest mb-3 flex items-center gap-3"><span class="w-3 h-3 rounded-full bg-yellow-500 shadow-[0_0_12px_#eab308]"></span> Last Names</h3>
+                            <textarea v-model="namesText.last" class="flex-1 w-full bg-dark/80 border border-gray-800 rounded-2xl p-5 text-sm list-textarea focus:border-yellow-500/50 focus:outline-none focus:ring-2 focus:ring-yellow-500/20 transition-all custom-scrollbar" wrap="off"></textarea>
+                        </div>
+                    </div>
+
+                    <!-- PHRASES TAB -->
+                    <div v-else-if="activeTab === 'phrases'" key="phrases" class="columns-1 md:columns-2 gap-8 space-y-8 gsap-wrapper">
+                        <div v-for="key in phraseKeys" :key="key" class="gsap-item bg-panel p-8 rounded-3xl border border-gray-800/60 shadow-xl break-inside-avoid hover:border-accent/40 transition-colors group">
+                            <h3 class="text-sm font-black text-white mb-5 flex items-center gap-3">
+                                <span class="bg-accent/20 text-accent px-2 py-1 rounded text-xs">#</span>
+                                {{ key.replace('Phrases', '') }}
+                            </h3>
+                            <textarea v-model="phrasesText[key]" rows="4" class="w-full bg-dark/80 border border-gray-800 rounded-2xl p-5 text-sm list-textarea focus:border-accent/50 focus:outline-none focus:ring-2 focus:ring-accent/20 transition-all custom-scrollbar"></textarea>
+                        </div>
+                    </div>
+                </transition>
+            </div>
+        </div>
+        
+        <!-- Empty State -->
+        <div v-else class="flex-1 flex flex-col items-center justify-center text-gray-500 bg-dark z-0">
+            <svg class="w-24 h-24 mb-6 opacity-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 002-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
+            <p class="text-xl font-bold tracking-widest uppercase opacity-20">Awaiting Race Selection</p>
+        </div>
+
+    </template>
+
+</div>
+
+<script>
+    const { createApp, ref, computed, watch, reactive, onMounted, nextTick } = Vue;
+
+    // Stylish 3D Skin Viewer Component
+    const SkinViewer = {
+        props:['texture'],
+        template: `
+            <div class="w-28 h-48 bg-gradient-to-b from-gray-700/20 to-black/80 rounded-3xl shadow-[inset_0_2px_20px_rgba(0,0,0,0.8)] border border-gray-700 flex items-center justify-center relative group overflow-hidden transform transition-transform duration-500 hover:scale-105">
+                <div class="absolute bottom-2 w-20 h-6 bg-black/60 blur-xl rounded-full"></div>
+                <div ref="container" class="relative z-10 drop-shadow-2xl"></div>
+                <!-- Interactive light reflection -->
+                <div class="absolute inset-0 bg-gradient-to-tr from-accent/0 via-white/5 to-white/20 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none duration-500"></div>
+            </div>
+        `,
+        mounted() { this.initViewer(); },
+        methods: {
+            initViewer() {
+                if (!this.texture) return;
+                try {
+                    const decoded = atob(this.texture);
+                    const json = JSON.parse(decoded);
+                    const skinUrl = json.textures.SKIN.url;
+
+                    this.viewer = new skinview3d.SkinViewer({
+                        canvas: document.createElement("canvas"),
+                        width: 90, height: 170, skin: skinUrl
+                    });
+                    
+                    this.viewer.animation = new skinview3d.WalkingAnimation();
+                    this.viewer.animation.speed = 0.5;
+                    this.viewer.camera.position.set(25, 10, 45);
+
+                    this.$refs.container.innerHTML = '';
+                    this.$refs.container.appendChild(this.viewer.canvas);
+                } catch (e) {
+                    this.$refs.container.innerHTML = '<div class="flex h-full items-center justify-center text-xs font-black text-red-500/50 uppercase tracking-widest">Broken</div>';
+                }
+            }
+        },
+        watch: { texture() { this.initViewer(); } }
+    };
+
+    createApp({
+        components: { 'skin-viewer': SkinViewer },
+        setup() {
+            const supportsFSA = ref('showDirectoryPicker' in window);
+            const isConnected = ref(false);
+            const dirHandle = ref(null);
+            
+            const config = reactive({ races: {} });
+            const externalFiles = reactive({});
+
+            const activeRaceKey = ref(null);
+            const activeTab = ref('general');
+            
+            const saving = ref(false);
+            const saveMessage = ref('');
+
+            const phraseKeys =[
+                'sleepInterruptionPhrases', 'damagePhrases', 'joblessPhrases', 
+                'noItemsToTradePhrases', 'noQuestPhrases', 'totemOfUndyingResurrectionPhrases',
+                'imprisonedOrStuckPhrases', 'startFightPhrases', 'meleeKillPhrases',
+                'rangedKillPhrases', 'warningPhrases', 'witnessMurderPhrases'
+            ];
+
+            const namesText = reactive({ male: '', female: '', last: '' });
+            const phrasesText = reactive({});
+
+            const activeRace = computed(() => activeRaceKey.value ? config.races[activeRaceKey.value] : null);
+            const activeExternalFiles = computed(() => activeRaceKey.value ? externalFiles[activeRaceKey.value] : null);
+
+            // --- UI & Animations ---
+            const activeTabStyle = ref({});
+            
+            watch(activeTab, async () => {
+                await nextTick();
+                updateTabStyle();
+            });
+
+            const updateTabStyle = () => {
+                // Find active button
+                const buttons = document.querySelectorAll('nav button');
+                const tabs =['general', 'skins', 'names', 'phrases'];
+                const index = tabs.indexOf(activeTab.value);
+                if(index >= 0 && buttons[index]) {
+                    const btn = buttons[index];
+                    activeTabStyle.value = {
+                        width: `${btn.offsetWidth}px`,
+                        transform: `translateX(${btn.offsetLeft}px)`
+                    };
+                }
+            };
+
+            const updateMouse = (e) => {
+                document.documentElement.style.setProperty('--mouse-x', e.clientX + 'px');
+                document.documentElement.style.setProperty('--mouse-y', e.clientY + 'px');
+            };
+
+            // GSAP Transitions Hooks
+            const enterWelcome = (el, done) => {
+                gsap.from(el.querySelectorAll('.welcome-content > *'), {
+                    y: 40, opacity: 0, duration: 0.8, stagger: 0.15, ease: "back.out(1.2)", onComplete: done
+                });
+            };
+            const leaveWelcome = (el, done) => {
+                gsap.to(el, { opacity: 0, scale: 0.95, duration: 0.5, ease: "power2.inOut", onComplete: done });
+            };
+
+            const enterSidebarItem = (el, done) => {
+                const delay = el.dataset.index * 0.08;
+                gsap.fromTo(el, { x: -30, opacity: 0 }, { x: 0, opacity: 1, duration: 0.5, delay, ease: "power3.out", onComplete: done });
+            };
+
+            const gsapEnter = (el, done) => {
+                gsap.fromTo(el.querySelectorAll('.gsap-item'), 
+                    { y: 40, opacity: 0, scale: 0.98 }, 
+                    { y: 0, opacity: 1, scale: 1, duration: 0.6, stagger: 0.08, ease: "back.out(1)", onComplete: done }
+                );
+            };
+            const gsapLeave = (el, done) => {
+                gsap.to(el.querySelectorAll('.gsap-item'), { y: -20, opacity: 0, duration: 0.3, stagger: 0.05, ease: "power2.in", onComplete: done });
+            };
+
+            const enterTableRow = (el, done) => {
+                const delay = el.dataset.index * 0.1;
+                gsap.fromTo(el, { opacity: 0, x: -20 }, { opacity: 1, x: 0, duration: 0.4, delay, ease: "power2.out", onComplete: done });
+            };
+            const leaveTableRow = (el, done) => {
+                gsap.to(el, { opacity: 0, scale: 0.9, duration: 0.3, ease: "power2.in", onComplete: done });
+            };
+
+
+            // --- File System Logic ---
+            async function getFileContentFSA(dir, filename) {
+                try {
+                    const handle = await dir.getFileHandle(filename);
+                    const file = await handle.getFile();
+                    return await file.text();
+                } catch { return null; }
+            }
+
+            const openFolderFSA = async () => {
+                try {
+                    dirHandle.value = await window.showDirectoryPicker({ mode: 'readwrite' });
+                    const racesText = await getFileContentFSA(dirHandle.value, 'races.yml');
+                    if (racesText) config.races = jsyaml.load(racesText) || {};
+
+                    let racesDirHandle;
+                    try { racesDirHandle = await dirHandle.value.getDirectoryHandle('races'); } catch (e) {}
+
+                    for (const raceName of Object.keys(config.races)) {
+                        initializeEmptyExternalFiles(raceName);
+                        if (racesDirHandle) {
+                            try {
+                                const specificRaceDir = await racesDirHandle.getDirectoryHandle(raceName);
+                                const sText = await getFileContentFSA(specificRaceDir, 'skins.yml');
+                                if (sText) {
+                                    const parsed = jsyaml.load(sText);
+                                    externalFiles[raceName].skins = { male: parsed.male || {}, female: parsed.female || {} };
+                                }
+                                const nText = await getFileContentFSA(specificRaceDir, 'names.yml');
+                                if (nText) externalFiles[raceName].names = Object.assign(externalFiles[raceName].names, jsyaml.load(nText));
+                                const pText = await getFileContentFSA(specificRaceDir, 'phrases.yml');
+                                if (pText) externalFiles[raceName].phrases = Object.assign(externalFiles[raceName].phrases, jsyaml.load(pText));
+                            } catch (e) {}
+                        }
+                    }
+                    isConnected.value = true;
+                } catch (err) {}
+            };
+
+            const openFolderFallback = async (event) => {
+                const files = event.target.files;
+                if (!files.length) return;
+                const fileMap = {};
+                for (let file of files) {
+                    const parts = file.webkitRelativePath.split('/');
+                    parts.shift();
+                    fileMap[parts.join('/')] = file;
+                }
+                const readText = async (path) => fileMap[path] ? await fileMap[path].text() : null;
+
+                const racesText = await readText('races.yml');
+                if (racesText) config.races = jsyaml.load(racesText) || {};
+
+                for (const raceName of Object.keys(config.races)) {
+                    initializeEmptyExternalFiles(raceName);
+                    const sText = await readText(`races/${raceName}/skins.yml`);
+                    if (sText) {
+                        const parsed = jsyaml.load(sText);
+                        externalFiles[raceName].skins = { male: parsed.male || {}, female: parsed.female || {} };
+                    }
+                    const nText = await readText(`races/${raceName}/names.yml`);
+                    if (nText) externalFiles[raceName].names = Object.assign(externalFiles[raceName].names, jsyaml.load(nText));
+                    const pText = await readText(`races/${raceName}/phrases.yml`);
+                    if (pText) externalFiles[raceName].phrases = Object.assign(externalFiles[raceName].phrases, jsyaml.load(pText));
+                }
+                isConnected.value = true;
+            };
+
+            const initializeEmptyExternalFiles = (raceName) => {
+                externalFiles[raceName] = { 
+                    skins: { male: {}, female: {} },
+                    names: { 'male-first-names':[], 'female-first-names': [], 'last-names':[] },
+                    phrases: phraseKeys.reduce((acc, key) => ({...acc, [key]:[]}), {})
+                };
+            };
+
+            const selectRace = (key) => {
+                syncTextToState();
+                activeRaceKey.value = key;
+                activeTab.value = 'general';
+                setTimeout(() => updateTabStyle(), 50); // initial setup for tabs
+                
+                const ext = externalFiles[key];
+                namesText.male = ext.names['male-first-names']?.join('\n') || '';
+                namesText.female = ext.names['female-first-names']?.join('\n') || '';
+                namesText.last = ext.names['last-names']?.join('\n') || '';
+                phraseKeys.forEach(k => { phrasesText[k] = ext.phrases[k]?.join('\n') || ''; });
+            };
+
+            const syncTextToState = () => {
+                if (!activeRaceKey.value) return;
+                const ext = externalFiles[activeRaceKey.value];
+                const splitClean = (str) => str.split('\n').map(s => s.trim()).filter(s => s);
+                
+                ext.names['male-first-names'] = splitClean(namesText.male);
+                ext.names['female-first-names'] = splitClean(namesText.female);
+                ext.names['last-names'] = splitClean(namesText.last);
+                phraseKeys.forEach(k => { ext.phrases[k] = splitClean(phrasesText[k] || ''); });
+            };
+
+            watch([namesText, phrasesText], () => { syncTextToState(); }, { deep: true });
+
+            const addNewRace = () => {
+                const name = prompt('Enter new race ID (e.g., goblin):');
+                if (name && !config.races[name]) {
+                    config.races[name] = {
+                        'target-entity-type': 'VILLAGER', 'target-villager-type': 'PLAINS',
+                        'leader-title': 'Leader', 'normal-currency': 'EMERALD', 'special-currency': 'EMERALD_BLOCK'
+                    };
+                    initializeEmptyExternalFiles(name);
+                    selectRace(name);
+                }
+            };
+
+            const saveAll = async () => {
+                syncTextToState();
+                saving.value = true;
+                saveMessage.value = '';
+
+                try {
+                    if (supportsFSA.value && dirHandle.value) {
+                        const saveFileContent = async (dir, filename, content) => {
+                            const handle = await dir.getFileHandle(filename, { create: true });
+                            const writable = await handle.createWritable();
+                            await writable.write(content);
+                            await writable.close();
+                        };
+
+                        await saveFileContent(dirHandle.value, 'races.yml', jsyaml.dump(config.races, { indent: 2, lineWidth: -1 }));
+                        const racesDirHandle = await dirHandle.value.getDirectoryHandle('races', { create: true });
+
+                        for (const raceName of Object.keys(config.races)) {
+                            const raceDir = await racesDirHandle.getDirectoryHandle(raceName, { create: true });
+                            const ext = externalFiles[raceName];
+
+                            if(Object.keys(ext.skins.male).length > 0 || Object.keys(ext.skins.female).length > 0) {
+                                await saveFileContent(raceDir, 'skins.yml', jsyaml.dump(ext.skins, { indent: 2, forceQuotes: true }));
+                            }
+                            await saveFileContent(raceDir, 'names.yml', jsyaml.dump(ext.names, { indent: 2 }));
+                            await saveFileContent(raceDir, 'phrases.yml', jsyaml.dump(ext.phrases, { indent: 2 }));
+                        }
+                        saveMessage.value = 'Saved directly to disk!';
+                    } else {
+                        const zip = new JSZip();
+                        zip.file("races.yml", jsyaml.dump(config.races, { indent: 2, lineWidth: -1 }));
+                        const racesFolder = zip.folder("races");
+                        for (const raceName of Object.keys(config.races)) {
+                            const ext = externalFiles[raceName];
+                            const raceFolder = racesFolder.folder(raceName);
+                            if(Object.keys(ext.skins.male).length > 0 || Object.keys(ext.skins.female).length > 0) {
+                                raceFolder.file("skins.yml", jsyaml.dump(ext.skins, { indent: 2, forceQuotes: true }));
+                            }
+                            raceFolder.file("names.yml", jsyaml.dump(ext.names, { indent: 2 }));
+                            raceFolder.file("phrases.yml", jsyaml.dump(ext.phrases, { indent: 2 }));
+                        }
+
+                        const blob = await zip.generateAsync({ type: "blob" });
+                        const url = window.URL.createObjectURL(blob);
+                        const a = document.createElement("a");
+                        a.href = url; a.download = "Souverainete-Update.zip";
+                        document.body.appendChild(a); a.click();
+                        window.URL.revokeObjectURL(url); document.body.removeChild(a);
+                        saveMessage.value = 'ZIP Archive generated!';
+                    }
+                    setTimeout(() => saveMessage.value = '', 4000);
+                } catch (e) {
+                    alert("Failed to save. Check console for details.");
+                } finally { saving.value = false; }
+            };
+
+            const addSkin = (gender) => {
+                const skins = activeExternalFiles.value.skins[gender];
+                let nextId = 1.0;
+                while (skins[nextId.toFixed(1)] !== undefined) { nextId += 1.0; }
+                skins[nextId.toFixed(1)] = { texture: "", signature: "" };
+            };
+
+            const deleteSkin = (gender, id) => {
+                if(confirm(`Obliterate model ${id}?`)) delete activeExternalFiles.value.skins[gender][id];
+            };
+
+            const updateSkinId = (gender, oldId, newId) => {
+                if (oldId === newId || !newId) return;
+                const skins = activeExternalFiles.value.skins[gender];
+                skins[newId] = skins[oldId];
+                delete skins[oldId];
+            };
+
+            return {
+                supportsFSA, isConnected, openFolderFSA, openFolderFallback,
+                config, externalFiles, activeRaceKey, activeRace, activeExternalFiles,
+                activeTab, activeTabStyle, phraseKeys, namesText, phrasesText,
+                saving, saveMessage, updateMouse,
+                enterWelcome, leaveWelcome, enterSidebarItem, gsapEnter, gsapLeave, enterTableRow, leaveTableRow,
+                selectRace, addNewRace, saveAll, addSkin, deleteSkin, updateSkinId
+            };
+        }
+    }).mount('#app');
+</script>
+</body>
+</html>
